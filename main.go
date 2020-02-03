@@ -19,6 +19,8 @@ func traverse(dir string) error {
 		Callback: func(osPathname string, de *godirwalk.Dirent) error {
 			countSuccess++
 
+			os.Lstat(osPathname)
+
 			if debug {
 				// ftype := "f"
 				// if de.ModeType().IsDir() {
