@@ -4,9 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"time"
-
-	"github.com/karrick/godirwalk"
 )
 
 var verbose = false
@@ -15,50 +14,62 @@ var countSuccess int64 = 0
 var countSkippedDirs int64 = 0
 
 func traverse(dir string) error {
-	err := godirwalk.Walk(dir, &godirwalk.Options{
-		Callback: func(osPathname string, de *godirwalk.Dirent) error {
-			countSuccess++
 
-			os.Lstat(osPathname)
+	root, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
 
-			if debug {
-				// ftype := "f"
-				// if de.ModeType().IsDir() {
-				// 	ftype = "d"
-				// }
+	fileinfos, err := root.Readdir(0)
+	if err != nil {
+		return err
+	}
 
-				// symlink := ""
-				// if (de.ModeType() & os.ModeSymlink) != 0 {
-				// 	symlink = "(s)"
-				// }
+	if err := root.Close(); err != nil {
+		return err
+	}
 
-				// fmt.Printf("%v%v\t%v/%v\t(%v bytes)\tmod %v\n",
-				// 	ftype, symlink, dir, de.Name(), fileinfo.Size(), fileinfo.ModTime())
-			} else {
-				if countSuccess%1000 == 0 {
-					fmt.Print(".")
+	for _, fileinfo := range fileinfos {
+		if fileinfo.IsDir() {
+			subdir := path.Join(dir, fileinfo.Name())
+
+			if err := traverse(subdir); err != nil {
+				if verbose {
+					fmt.Printf("\nFailed to traverse '%v': %v\n", subdir, err)
 				}
-				if countSuccess%100000 == 0 {
-					fmt.Print("\n")
-				}
-				if countSuccess%1000000 == 0 {
-					fmt.Print("\n")
-				}
+				countSkippedDirs++
+			}
+		}
+
+		countSuccess++
+
+		if debug {
+			ftype := "f"
+			if fileinfo.IsDir() {
+				ftype = "d"
 			}
 
-			return nil
-		},
-		ErrorCallback: func(path string, err error) godirwalk.ErrorAction {
-			if verbose {
-				fmt.Printf("\nFailed to traverse '%v': %v\n", path, err)
+			symlink := ""
+			if (fileinfo.Mode() & os.ModeSymlink) != 0 {
+				symlink = "(s)"
 			}
-			countSkippedDirs++
-			return godirwalk.SkipNode
-		},
-		Unsorted:            true,
-		FollowSymbolicLinks: false,
-	})
-	return err
+
+			fmt.Printf("%v%v\t%v/%v\t(%v bytes)\tmod %v\n",
+				ftype, symlink, dir, fileinfo.Name(), fileinfo.Size(), fileinfo.ModTime())
+		} else {
+			if countSuccess%1000 == 0 {
+				fmt.Print(".")
+			}
+			if countSuccess%100000 == 0 {
+				fmt.Print("\n")
+			}
+			if countSuccess%1000000 == 0 {
+				fmt.Print("\n")
+			}
+		}
+	}
+
+	return nil
 }
 
 func main() {
