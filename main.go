@@ -58,7 +58,7 @@ func traverseAndInsert(dir string, insertStatement *sql.Stmt) error {
 
 			subdir := path.Join(dir, fileinfo.Name())
 			if err := traverseAndInsert(subdir, insertStatement); err != nil {
-				if verbose {
+				if verbose || debug {
 					fmt.Printf("\nFailed to traverse '%v': %v\n", subdir, err)
 				}
 				countSkippedDirs++
@@ -86,8 +86,8 @@ func traverseAndInsert(dir string, insertStatement *sql.Stmt) error {
 		countSuccess++
 
 		if debug {
-			fmt.Printf("%v%v\t%v/%v\t(%v bytes)\tmod %v\n",
-				isDir, isSymlink, dir, fileinfo.Name(), fileinfo.Size(), fileinfo.ModTime())
+			fmt.Printf("%v%v %v\t%v/%v (%v)\tmod %v\n",
+				isDir, isSymlink, fileinfo.Mode(), dir, fileinfo.Name(), fileinfo.Size(), fileinfo.ModTime())
 		} else {
 			if countSuccess%1000 == 0 {
 				fmt.Print(".")
