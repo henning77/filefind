@@ -24,7 +24,7 @@ func lowercaseExtension(filename string) string {
 	return strings.ToLower(ext)
 }
 
-func sqlescape(str string) string {
+func escapeSql(str string) string {
 	return strings.ReplaceAll(str, "'", "''")
 }
 
@@ -71,9 +71,9 @@ func traverseAndInsert(dir string) error {
 		}
 
 		fmt.Printf("INSERT INTO file(base, name, ext, is_dir, is_symlink, size, modified) VALUES('%s', '%s', '%s', %d, %d, %d, %s);\n",
-			sqlescape(dir),
-			sqlescape(fileinfo.Name()),
-			sqlescape(lowercaseExtension(fileinfo.Name())),
+			escapeSql(dir),
+			escapeSql(fileinfo.Name()),
+			escapeSql(lowercaseExtension(fileinfo.Name())),
 			isDir,
 			isSymlink,
 			fileinfo.Size(),
