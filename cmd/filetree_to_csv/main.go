@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,7 @@ func escapeSQL(str string) string {
 	return strings.ReplaceAll(str, "'", "''")
 }
 
-func traverseAndInsert(dir string, csvWriter *csv.Writer) error {
+func traverseAndInsert(dir string, basedir string, csvWriter *csv.Writer) error {
 	root, err := os.Open(dir)
 	if err != nil {
 		return err
@@ -59,7 +60,7 @@ func traverseAndInsert(dir string, csvWriter *csv.Writer) error {
 			isDir = 1
 
 			subdir := path.Join(dir, fileinfo.Name())
-			if err := traverseAndInsert(subdir, csvWriter); err != nil {
+			if err := traverseAndInsert(subdir, basedir, csvWriter); err != nil {
 				if verbose || debug {
 					fmt.Fprintf(os.Stderr, "\nFailed to traverse '%v': %v\n", subdir, err)
 				}
@@ -72,8 +73,16 @@ func traverseAndInsert(dir string, csvWriter *csv.Writer) error {
 			isSymlink = 1
 		}
 
+		reldir := dir
+		if basedir != "/" {
+			reldir, err = filepath.Rel(basedir, dir)
+			if err != nil {
+				return err
+			}
+		}
+
 		csvWriter.Write([]string{
-			dir,
+			reldir,
 			fileinfo.Name(),
 			lowercaseExtension(fileinfo.Name()),
 			strconv.Itoa(isDir),
@@ -105,14 +114,25 @@ func traverseAndInsert(dir string, csvWriter *csv.Writer) error {
 
 func main() {
 	pathPtr := flag.String("path", ".", "Path of the root directory to traverse")
+	basepathPtr := flag.String("base", "/", "Base path to strip from all paths")
 	flag.BoolVar(&verbose, "verbose", false, "Verbose output")
 	flag.BoolVar(&debug, "debug", false, "Debug output")
 	flag.Parse()
 
+	path, err := filepath.Abs(*pathPtr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	basepath, err := filepath.Abs(*basepathPtr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	csvWriter := csv.NewWriter(os.Stdout)
 
 	start := time.Now()
-	if err := traverseAndInsert(*pathPtr, csvWriter); err != nil {
+	if err := traverseAndInsert(path, basepath, csvWriter); err != nil {
 		log.Fatal(err)
 	}
 	elapsed := time.Since(start)
