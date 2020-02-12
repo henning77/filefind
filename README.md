@@ -13,11 +13,11 @@ Features:
 export PATH=$PATH:/share/Henning/go/bin/
 export GO_PATH=/share/Henning/go_path/
 
-go run main_printonly.go -path /share/Qusb/ | gzip > qusb.zip
-go run main_printonly.go -path /share/Qusb/ | gzip > qusb.zip 2> log.txt &
+go build
+./filetree_to_csv -path /share/Qusb/ -base /share | gzip > qusb.zip
+./filetree_to_csv -path /share/Qusb/ -base /share | gzip > qusb.zip 2> log.txt &
 
 
 ## Backlog
 
- * TODO Test umlauts, unicodes, etc. encoding: /share/Qusb/2011 Capgemini/Stream/2011-Q3 Masterarbeit Felix BÃ¶hm
- * TODO Set base path, remove from stored path (e.g. /share/Qusb/2011 Capgemini -> /2011 Capgemini/)
+ * TODO Test umlauts, unicodes, etc. encoding

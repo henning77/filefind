@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/csv"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -27,11 +25,37 @@ func lowercaseExtension(filename string) string {
 	return strings.ToLower(ext)
 }
 
-func escapeSQL(str string) string {
-	return strings.ReplaceAll(str, "'", "''")
+func createFileProxy(srcDir string, srcBaseDir string, destDir string, file os.FileInfo) error {
+	relDir, err := filepath.Rel(srcBaseDir, srcDir)
+	if err != nil {
+		return err
+	}
+
+	targetDir := filepath.Join(destDir, relDir)
+	if err := os.MkdirAll(targetDir, 0770); err != nil {
+		return err
+	}
+
+	targetFilename := filepath.Join(targetDir, file.Name())
+
+	f, err := os.Create(targetFilename)
+	if err != nil {
+		return err
+	}
+	f.Close()
+
+	if err := os.Chtimes(targetFilename, file.ModTime(), file.ModTime()); err != nil {
+		return err
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Created %v\n", targetFilename)
+	}
+
+	return nil
 }
 
-func traverse(dir string, basedir string, csvWriter *csv.Writer) error {
+func traverse(dir string, baseDir string, destDir string) error {
 	root, err := os.Open(dir)
 	if err != nil {
 		return err
@@ -60,42 +84,23 @@ func traverse(dir string, basedir string, csvWriter *csv.Writer) error {
 			isDir = 1
 
 			subdir := path.Join(dir, fileinfo.Name())
-			if err := traverse(subdir, basedir, csvWriter); err != nil {
+			if err := traverse(subdir, baseDir, destDir); err != nil {
 				if verbose || debug {
 					fmt.Fprintf(os.Stderr, "\nFailed to traverse '%v': %v\n", subdir, err)
 				}
 				countSkippedDirs++
 			}
-		}
-
-		isSymlink := 0
-		if (fileinfo.Mode() & os.ModeSymlink) != 0 {
-			isSymlink = 1
-		}
-
-		reldir := dir
-		if basedir != "/" {
-			reldir, err = filepath.Rel(basedir, dir)
-			if err != nil {
+		} else {
+			if err := createFileProxy(dir, baseDir, destDir, fileinfo); err != nil {
 				return err
 			}
 		}
 
-		csvWriter.Write([]string{
-			reldir,
-			fileinfo.Name(),
-			lowercaseExtension(fileinfo.Name()),
-			strconv.Itoa(isDir),
-			strconv.Itoa(isSymlink),
-			strconv.FormatInt(fileinfo.Size(), 10),
-			fileinfo.ModTime().Format("'2006-01-02 15:04:05'"),
-		})
-
 		countSuccess++
 
 		if debug {
-			fmt.Fprintf(os.Stderr, "%v%v %v\t%v/%v (%v)\tmod %v\n",
-				isDir, isSymlink, fileinfo.Mode(), dir, fileinfo.Name(), fileinfo.Size(), fileinfo.ModTime())
+			fmt.Fprintf(os.Stderr, "%v %v\t%v/%v (%v)\tmod %v\n",
+				isDir, fileinfo.Mode(), dir, fileinfo.Name(), fileinfo.Size(), fileinfo.ModTime())
 		} else {
 			if countSuccess%1000 == 0 {
 				fmt.Fprint(os.Stderr, ".")
@@ -113,19 +118,17 @@ func traverse(dir string, basedir string, csvWriter *csv.Writer) error {
 }
 
 func main() {
-	pathPtr := flag.String("src", ".", "Source path of the tree to mirror")
-	pathPtr := flag.String("dest", ".", "Destination path")
+	srcDirPtr := flag.String("src", ".", "Source directory")
+	destDirPtr := flag.String("dest", "", "Destination directory")
 	flag.BoolVar(&verbose, "verbose", false, "Verbose output")
 	flag.BoolVar(&debug, "debug", false, "Debug output")
 	flag.Parse()
 
 	start := time.Now()
-	if err := traverse(path, basepath, csvWriter); err != nil {
+	if err := traverse(*srcDirPtr, *srcDirPtr, *destDirPtr); err != nil {
 		log.Fatal(err)
 	}
 	elapsed := time.Since(start)
-
-	csvWriter.Flush()
 
 	fps := float64(countSuccess) / elapsed.Seconds()
 	fmt.Fprintf(os.Stderr, "\nFound %v files and dirs. Skipped %v directories. Time %.1fs (%.1f files per second)\n",

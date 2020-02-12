@@ -2,3 +2,4 @@
 cmd/filetree_to_sql/filetree_to_sql
 cmd/filetree_to_sqlite/filetree_to_sqlite
 cmd/filetree_to_csv/filetree_to_csv
+cmd/filetree_mirror/filetree_mirror
