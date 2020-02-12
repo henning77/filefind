@@ -27,11 +27,7 @@ func lowercaseExtension(filename string) string {
 	return strings.ToLower(ext)
 }
 
-func escapeSQL(str string) string {
-	return strings.ReplaceAll(str, "'", "''")
-}
-
-func traverseAndInsert(dir string, basedir string, csvWriter *csv.Writer) error {
+func traverse(dir string, basedir string, csvWriter *csv.Writer) error {
 	root, err := os.Open(dir)
 	if err != nil {
 		return err
@@ -60,7 +56,7 @@ func traverseAndInsert(dir string, basedir string, csvWriter *csv.Writer) error 
 			isDir = 1
 
 			subdir := path.Join(dir, fileinfo.Name())
-			if err := traverseAndInsert(subdir, basedir, csvWriter); err != nil {
+			if err := traverse(subdir, basedir, csvWriter); err != nil {
 				if verbose || debug {
 					fmt.Fprintf(os.Stderr, "\nFailed to traverse '%v': %v\n", subdir, err)
 				}
@@ -132,7 +128,7 @@ func main() {
 	csvWriter := csv.NewWriter(os.Stdout)
 
 	start := time.Now()
-	if err := traverseAndInsert(path, basepath, csvWriter); err != nil {
+	if err := traverse(path, basepath, csvWriter); err != nil {
 		log.Fatal(err)
 	}
 	elapsed := time.Since(start)
