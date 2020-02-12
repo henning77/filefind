@@ -1,1 +1,3 @@
 .DS_Store
+cmd/filefind/filefind
+cmd/filefind_printonly/filefind_printonly
