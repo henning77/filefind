@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path"
@@ -13,6 +14,9 @@ import (
 
 var verbose = false
 var debug = false
+var maxSizeToCopy int64 = 50 * 1024
+var fileExtensionsToCopy = []string{"txt", "md", "bas", "c", "cpp", "h", "java", "go", "doc", "docx", "xls", "xlsx"}
+
 var countSuccess int64 = 0
 var countSkippedDirs int64 = 0
 
@@ -25,31 +29,58 @@ func lowercaseExtension(filename string) string {
 	return strings.ToLower(ext)
 }
 
-func createFileProxy(srcDir string, srcBaseDir string, destDir string, file os.FileInfo) error {
-	relDir, err := filepath.Rel(srcBaseDir, srcDir)
+func fileExtensionEligibleForCopy(filename string) bool {
+	ext := lowercaseExtension(filename)
+	for _, e := range fileExtensionsToCopy {
+		if e == ext {
+			return true
+		}
+	}
+	return false
+}
+
+func fileEligibleForCopy(file os.FileInfo) bool {
+	return fileExtensionEligibleForCopy(file.Name()) && file.Size() <= maxSizeToCopy
+}
+
+func createFileProxy(srcAbsDir string, srcBaseDir string, destAbsDir string, source os.FileInfo) error {
+	destRelDir, err := filepath.Rel(srcBaseDir, srcAbsDir)
 	if err != nil {
 		return err
 	}
 
-	targetDir := filepath.Join(destDir, relDir)
-	if err := os.MkdirAll(targetDir, 0770); err != nil {
+	destFullDir := filepath.Join(destAbsDir, destRelDir)
+	if err := os.MkdirAll(destFullDir, 0770); err != nil {
 		return err
 	}
 
-	targetFilename := filepath.Join(targetDir, file.Name())
+	destFilename := filepath.Join(destFullDir, source.Name())
 
-	f, err := os.Create(targetFilename)
+	dest, err := os.Create(destFilename)
 	if err != nil {
 		return err
 	}
-	f.Close()
+	defer dest.Close()
 
-	if err := os.Chtimes(targetFilename, file.ModTime(), file.ModTime()); err != nil {
+	if fileEligibleForCopy(source) {
+		source, err := os.Open(path.Join(srcAbsDir, source.Name()))
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+
+		_, err = io.Copy(dest, source)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := os.Chtimes(destFilename, source.ModTime(), source.ModTime()); err != nil {
 		return err
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "Created %v\n", targetFilename)
+		fmt.Fprintf(os.Stderr, "Created %v\n", destFilename)
 	}
 
 	return nil
