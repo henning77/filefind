@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -16,9 +17,17 @@ var verbose = false
 var debug = false
 var maxSizeToCopy int64 = 50 * 1024
 var fileExtensionsToCopy = []string{"txt", "md", "bas", "c", "cpp", "h", "java", "go", "doc", "docx", "xls", "xlsx"}
+var filenameRegexToExclude = []*regexp.Regexp{
+	regexp.MustCompile(`\.git`),
+	regexp.MustCompile(`\.svn`),
+	regexp.MustCompile(`\.idea`),
+	regexp.MustCompile(`\.vscode`),
+	regexp.MustCompile(`.*\.class`),
+	regexp.MustCompile(`\.DS_Store`),
+}
 
 var countSuccess int64 = 0
-var countSkippedDirs int64 = 0
+var countSkippedFiles int64 = 0
 
 func lowercaseExtension(filename string) string {
 	ext := path.Ext(filename)
@@ -40,7 +49,18 @@ func fileExtensionEligibleForCopy(filename string) bool {
 }
 
 func fileEligibleForCopy(file os.FileInfo) bool {
-	return fileExtensionEligibleForCopy(file.Name()) && file.Size() <= maxSizeToCopy
+	return (file.Mode()&os.ModeSymlink) == 0 &&
+		fileExtensionEligibleForCopy(file.Name()) &&
+		file.Size() <= maxSizeToCopy
+}
+
+func fileToExclude(filename string) bool {
+	for _, re := range filenameRegexToExclude {
+		if re.MatchString(filename) {
+			return true
+		}
+	}
+	return false
 }
 
 func createFileProxy(srcAbsDir string, srcBaseDir string, destAbsDir string, source os.FileInfo) error {
@@ -110,20 +130,26 @@ func traverse(dir string, baseDir string, destDir string) error {
 			continue
 		}
 
+		if fileToExclude(fileinfo.Name()) {
+			if debug {
+				fmt.Fprintf(os.Stderr, "\nExcluded: %v/%v\n", dir, fileinfo.Name())
+			}
+			continue
+		}
+
 		isDir := 0
 		if fileinfo.IsDir() {
 			isDir = 1
 
 			subdir := path.Join(dir, fileinfo.Name())
 			if err := traverse(subdir, baseDir, destDir); err != nil {
-				if verbose || debug {
-					fmt.Fprintf(os.Stderr, "\nFailed to traverse '%v': %v\n", subdir, err)
-				}
-				countSkippedDirs++
+				fmt.Fprintf(os.Stderr, "\nFailed to traverse '%v': %v\n", subdir, err)
+				countSkippedFiles++
 			}
 		} else {
 			if err := createFileProxy(dir, baseDir, destDir, fileinfo); err != nil {
-				return err
+				fmt.Fprintf(os.Stderr, "\nFailed to create proxy for '%s/%s': %s\n", dir, fileinfo.Name(), err)
+				countSkippedFiles++
 			}
 		}
 
@@ -162,6 +188,6 @@ func main() {
 	elapsed := time.Since(start)
 
 	fps := float64(countSuccess) / elapsed.Seconds()
-	fmt.Fprintf(os.Stderr, "\nFound %v files and dirs. Skipped %v directories. Time %.1fs (%.1f files per second)\n",
-		countSuccess, countSkippedDirs, elapsed.Seconds(), fps)
+	fmt.Fprintf(os.Stderr, "\nFound %v files and dirs. Skipped %v files or directories because of an error. Time %.1fs (%.1f files per second)\n",
+		countSuccess, countSkippedFiles, elapsed.Seconds(), fps)
 }
