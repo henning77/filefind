@@ -24,6 +24,8 @@ var filenameRegexToExclude = []*regexp.Regexp{
 	regexp.MustCompile(`\.vscode`),
 	regexp.MustCompile(`.*\.class`),
 	regexp.MustCompile(`\.DS_Store`),
+	regexp.MustCompile(`.*Temporary.*Items`),
+	regexp.MustCompile(`\.@__thumb`),
 }
 
 var countSuccess int64 = 0
