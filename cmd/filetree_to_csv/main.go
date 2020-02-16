@@ -9,23 +9,15 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
+
+	"github.com/henning77/filefind/internal/util"
 )
 
 var verbose = false
 var debug = false
 var countSuccess int64 = 0
 var countSkippedDirs int64 = 0
-
-func lowercaseExtension(filename string) string {
-	ext := path.Ext(filename)
-	// Remove dot
-	if len(ext) > 1 {
-		ext = ext[1:]
-	}
-	return strings.ToLower(ext)
-}
 
 func traverse(dir string, basedir string, csvWriter *csv.Writer) error {
 	root, err := os.Open(dir)
@@ -51,15 +43,20 @@ func traverse(dir string, basedir string, csvWriter *csv.Writer) error {
 			continue
 		}
 
+		if util.FileToExclude(fileinfo.Name()) {
+			if debug {
+				fmt.Fprintf(os.Stderr, "\nExcluded: %v/%v\n", dir, fileinfo.Name())
+			}
+			continue
+		}
+
 		isDir := 0
 		if fileinfo.IsDir() {
 			isDir = 1
 
 			subdir := path.Join(dir, fileinfo.Name())
 			if err := traverse(subdir, basedir, csvWriter); err != nil {
-				if verbose || debug {
-					fmt.Fprintf(os.Stderr, "\nFailed to traverse '%v': %v\n", subdir, err)
-				}
+				fmt.Fprintf(os.Stderr, "\nFailed to traverse '%v': %v\n", subdir, err)
 				countSkippedDirs++
 			}
 		}
@@ -80,7 +77,7 @@ func traverse(dir string, basedir string, csvWriter *csv.Writer) error {
 		csvWriter.Write([]string{
 			reldir,
 			fileinfo.Name(),
-			lowercaseExtension(fileinfo.Name()),
+			util.LowercaseExtension(fileinfo.Name()),
 			strconv.Itoa(isDir),
 			strconv.Itoa(isSymlink),
 			strconv.FormatInt(fileinfo.Size(), 10),
